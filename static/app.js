@@ -22,6 +22,35 @@ function toggleSidebar() {
     }
 }
 
+// Desktop sidebar collapse — chevron button inside sidebar
+function collapseSidebar() {
+    var sidebar = document.getElementById('main-sidebar');
+    if (!sidebar) return;
+    var collapsed = sidebar.classList.toggle('collapsed');
+    try { localStorage.setItem('dailydex-sidebar-collapsed', collapsed ? '1' : '0'); } catch(e) {}
+}
+
+// Restore sidebar collapse state on load
+(function() {
+    try {
+        if (localStorage.getItem('dailydex-sidebar-collapsed') === '1') {
+            var sidebar = document.getElementById('main-sidebar');
+            if (sidebar) sidebar.classList.add('collapsed');
+        }
+    } catch(e) {}
+})();
+
+// Daily Brief rail tab switcher
+function briefTab(btn, panelId) {
+    var rail = document.getElementById('brief-rail');
+    if (!rail) return;
+    rail.querySelectorAll('.brief-tab').forEach(function(t) { t.classList.remove('active'); });
+    rail.querySelectorAll('.brief-rail-body').forEach(function(p) { p.hidden = true; });
+    btn.classList.add('active');
+    var panel = document.getElementById(panelId);
+    if (panel) panel.hidden = false;
+}
+
 function toggleTheme() {
     var body = document.body;
     var current = body.getAttribute('data-theme');
