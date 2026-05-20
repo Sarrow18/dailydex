@@ -1,5 +1,5 @@
 {
-  "variant": "creator",
+  "variant": "default",
   "variants": {
     "default": {
       "name": "DailyDex",
