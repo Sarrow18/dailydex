@@ -364,7 +364,49 @@ def _creator_score(factors: Dict) -> int:
     ))
 
 
-def enrich_scored_data_with_creator_fields(scored_data: Dict) -> Dict:
+import llm_summary
+from creator_enricher import content_hash as _content_hash
+
+
+def _apply_creator_pack(target: Dict, pack: Dict) -> None:
+    """Merge a cached LLM creator pack into an item dict.
+
+    Only overwrites a key when the LLM produced a non-empty value so that
+    deterministic fallbacks (titles, thumbnails) remain visible until the
+    real pack arrives.
+    """
+    if not pack:
+        return
+    string_fields = (
+        "opening_hook", "hook_line", "intro_context", "demo_segment",
+        "caveats", "closing_takeaway", "call_to_action", "short_script",
+        "visual_idea", "cta", "insight",
+    )
+    list_fields = (
+        "three_key_points", "three_beat_structure", "hooks", "tags",
+        "thumbnail_text", "broll_list", "on_screen_cues",
+    )
+    if pack.get("hook"):
+        target["opening_hook"] = pack["hook"]
+        target["hook_line"] = pack.get("hook_line") or pack["hook"]
+    for key in string_fields:
+        value = pack.get(key)
+        if value:
+            target[key] = value
+    for key in list_fields:
+        value = pack.get(key)
+        if value:
+            target[key] = value
+    titles = pack.get("suggested_titles") or {}
+    if any(titles.values()):
+        merged = dict(target.get("suggested_titles") or {})
+        for k, v in titles.items():
+            if v:
+                merged[k] = v
+        target["suggested_titles"] = merged
+
+
+def enrich_scored_data_with_creator_fields(scored_data: Dict, intel_db=None) -> Dict:
     """Add creator metadata to every scored item."""
     support_map = {}
     for cluster in build_topic_clusters(scored_data):
@@ -390,30 +432,26 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict) -> Dict:
                 "signal_score": item.get("signal_score", 0),
                 "creator_score": creator_score,
             }]
-            script_starter = {
-                "opening_hook": hook,
-                "intro_context": f"{topic} is moving quickly, and this item is one of the clearest signals worth turning into creator content right now.",
-                "three_key_points": _outline_points(topic, item, source_type),
-                "demo_segment": _demo_idea(item, topic, source_type),
-                "caveats": _risks_or_caveats(item, source_type),
-                "closing_takeaway": f"If you only remember one thing: {topic} matters when it creates something people can test, compare, or use immediately.",
-                "call_to_action": "Comment with the workflow, tool, or model you want tested next.",
-                "hook_line": hook,
-                "three_beat_structure": [
-                    f"Set up the promise around {topic}.",
-                    f"Show the one concrete proof point from {item.get('title', topic)}.",
-                    "End with a usable takeaway or next test.",
-                ],
-                "short_script": _short_script(topic, item),
-                "visual_idea": _demo_idea(item, topic, source_type),
-                "cta": "Follow for the next build or comparison.",
-            }
-            enriched_items.append({
+            # Deterministic baseline so the UI always renders something.
+            # Real LLM output is layered on top via _apply_creator_pack below.
+            sibling_titles = [
+                row.get("title", "")
+                for row in support.get("related_items", [])
+                if row.get("title")
+            ][:5]
+            hash_ = _content_hash(item)
+            enrichment_status = "unenriched"
+            enrichment_model = ""
+            enrichment_error = ""
+
+            enriched = {
                 **item,
+                "content_hash": hash_,
+                "cluster_sibling_titles": sibling_titles,
                 "creator_topic": topic,
                 "creator_score": creator_score,
                 "creator_score_breakdown": factors,
-                "creator_reason": f"High creator potential because it combines {topic.lower()}, evidence from {support.get('source_count', 1)} source family{'ies' if support.get('source_count', 1) != 1 else ''}, and {effort_label}-effort production.",
+                "creator_reason": f"High creator potential from {topic.lower()} trend.",
                 "recommended_content_format": best_format,
                 "production_effort": effort_label,
                 "why_viewers_care": _why_viewers_care(item, topic, support),
@@ -421,21 +459,41 @@ def enrich_scored_data_with_creator_fields(scored_data: Dict) -> Dict:
                 "demo_idea": _demo_idea(item, topic, source_type),
                 "risks_or_caveats": _risks_or_caveats(item, source_type),
                 "recommended_action": _recommended_action(creator_score, effort_label, support),
-                "opening_hook": script_starter["opening_hook"],
-                "intro_context": script_starter["intro_context"],
-                "three_key_points": script_starter["three_key_points"],
-                "demo_segment": script_starter["demo_segment"],
-                "caveats": script_starter["caveats"],
-                "closing_takeaway": script_starter["closing_takeaway"],
-                "call_to_action": script_starter["call_to_action"],
-                "hook_line": script_starter["hook_line"],
-                "three_beat_structure": script_starter["three_beat_structure"],
-                "short_script": script_starter["short_script"],
-                "visual_idea": script_starter["visual_idea"],
-                "cta": script_starter["cta"],
+                "opening_hook": item.get("opening_hook") or hook,
+                "hook_line": item.get("hook_line") or hook,
+                "intro_context": item.get("intro_context", ""),
+                "three_key_points": item.get("three_key_points", []) or _outline_points(topic, item, source_type),
+                "three_beat_structure": item.get("three_beat_structure", []),
+                "demo_segment": item.get("demo_segment", ""),
+                "caveats": item.get("caveats", ""),
+                "closing_takeaway": item.get("closing_takeaway", ""),
+                "call_to_action": item.get("call_to_action", ""),
+                "short_script": item.get("short_script") or _short_script(topic, item),
+                "visual_idea": item.get("visual_idea", ""),
+                "cta": item.get("cta", ""),
                 "suggested_titles": titles,
                 "thumbnail_text": thumbnails,
-            })
+                "broll_list": item.get("broll_list", []),
+                "on_screen_cues": item.get("on_screen_cues", []),
+            }
+
+            if intel_db is not None:
+                try:
+                    cached = intel_db.get_creator_asset(hash_)
+                except Exception:
+                    cached = None
+                if cached:
+                    status = cached.get("status") or "ready"
+                    enrichment_status = status
+                    enrichment_model = cached.get("model") or ""
+                    enrichment_error = cached.get("error") or ""
+                    if status in {"ready", "ready_with_warnings"}:
+                        _apply_creator_pack(enriched, cached.get("payload") or {})
+
+            enriched["enrichment_status"] = enrichment_status
+            enriched["enrichment_model"] = enrichment_model
+            enriched["enrichment_error"] = enrichment_error
+            enriched_items.append(enriched)
         scored_data[source_type] = enriched_items
     return scored_data
 

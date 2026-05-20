@@ -54,6 +54,10 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"></path><path d="M7 12h10"></path><path d="M10 18h4"></path></svg>
                     Content Pipeline
                 </button>
+                <button class="nav-btn" data-tab="forge-studio" id="nav-forge-studio">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path></svg>
+                    Forge Studio
+                </button>
                 <button class="nav-btn" data-tab="settings" id="nav-settings">
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
                     Settings
@@ -140,6 +144,9 @@
                         <span class="live-dot"></span>
                         <span class="live-text">Live</span>
                     </button>
+                    {% if creator_mode %}
+                    <span class="enrichment-pill" id="enrichment-status-pill" data-state="idle" title="Creator-pack LLM enrichment queue">LLM: idle</span>
+                    {% endif %}
                     <div class="last-updated-group">
                         <span class="last-updated-label">Updated</span>
                         <span class="last-updated">{{ last_updated }}</span>
@@ -163,6 +170,29 @@
                                     <span class="creator-stat">{{ creator_opportunities|length }} ideas</span>
                                     <span class="creator-stat">{{ creator_brief.pipeline_count }} in pipeline</span>
                                 </div>
+                            </div>
+                        </div>
+
+                        <div class="creator-section full-width">
+                            <h2 class="section-title">Recent Pipeline Ideas</h2>
+                            <div class="card-grid">
+                                {% for item in creator_saved_groups[0].group_entries[:3] %}
+                                <div class="card item-card creator-saved-card">
+                                    <div class="card-header">
+                                        <span class="badge-source">{{ item.format or 'Creator Idea' }}</span>
+                                        <span class="badge-score hot">{{ item.creator_score }}</span>
+                                    </div>
+                                    <div class="card-title">{{ item.working_title or item.title }}</div>
+                                    {% if item.hook %}
+                                    <div class="card-hook"><strong>Hook:</strong> {{ item.hook }}</div>
+                                    {% endif %}
+                                    <div class="card-footer">
+                                        <div class="card-actions">
+                                            <button class="btn btn-small" onclick="showTab('content-pipeline')">View in Pipeline</button>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% endfor %}
                             </div>
                         </div>
 
@@ -404,6 +434,12 @@
                                             <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
                                         </div>
                                         <div class="card-title">{{ item.title }}</div>
+                                        {% if item.insight %}
+                                        <div class="card-insight"><strong>Insight:</strong> {{ item.insight }}</div>
+                                        {% endif %}
+                                        {% if item.opening_hook %}
+                                        <div class="card-hook"><strong>Hook:</strong> {{ item.opening_hook }}</div>
+                                        {% endif %}
                                         <div class="card-why-matters"><strong>Why it matters:</strong> {{ item.why_it_matters }}</div>
                                         <div class="card-why-me"><strong>For me:</strong> {{ item.why_it_matters_to_me }}</div>
                                         <div class="card-footer">
@@ -474,11 +510,15 @@
                     </div>
                     <div class="creator-opportunity-grid">
                         {% for item in creator_opportunities %}
-                        <div class="card creator-opportunity-card creator-action-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook ~ ' ' ~ item.best_format)|lower }}">
+                        <div class="card creator-opportunity-card creator-action-card search-target" data-content-hash="{{ item.content_hash }}" data-enrichment="{{ item.enrichment_status or 'unenriched' }}" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook ~ ' ' ~ item.best_format)|lower }}">
                             <div class="creator-opportunity-head">
                                 <div>
                                     <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
                                     <span class="creator-topic-pill">{{ item.topic }}</span>
+                                    {% set es = item.enrichment_status or 'unenriched' %}
+                                    <span class="enrichment-badge state-{{ es }}" title="{{ item.enrichment_error or es }}">
+                                        {% if es == 'ready' %}LLM ✓{% elif es == 'ready_with_warnings' %}LLM ~{% elif es == 'queued' %}Queued{% elif es == 'failed' %}LLM ✗{% else %}Draft{% endif %}
+                                    </span>
                                 </div>
                                 <div class="creator-score-pair">
                                     <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
@@ -536,6 +576,7 @@
                                 <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save as idea</button>
                                 <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Build research pack</button>
                                 <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "script_ready", this)'>Draft script</button>
+                                <button class="btn btn-small" onclick='requestEnrichment({{ {"url": item.url, "title": item.title, "description": item.hook, "source_type": item.source_type, "creator_topic": item.topic}|tojson }}, this)'>Re-enrich</button>
                                 <button class="btn btn-small action-ignore" onclick='ignoreItem({{ {"url": item.url, "title": item.title, "source_type": item.source_type}|tojson }}, this)'>Ignore</button>
                                 <button class="btn btn-small" onclick='trackItem({{ {"topic": item.topic, "reason": "creator topic: " + item.title}|tojson }}, this)'>Track topic</button>
                             </div>
@@ -660,9 +701,34 @@
                                         <input class="saved-input creator-priority-input" type="text" placeholder="Priority" value="{{ item.priority or '' }}">
                                         <input class="saved-input creator-published-input" type="text" placeholder="Published URL" value="{{ item.published_url or '' }}">
                                         <textarea class="saved-textarea creator-notes-input" placeholder="Notes">{{ item.notes }}</textarea>
+                                        
+                                        {% if item.production_assets %}
+                                        <div class="production-forge-area">
+                                            <div class="forge-label">
+                                                🛠️ Production Forge
+                                                <button class="btn btn-tiny btn-primary" style="float: right; font-size: 0.6rem; padding: 2px 4px;" onclick="openItemInStudio({{ item.id }})">Open in Studio</button>
+                                            </div>
+                                            <div class="forge-tabs">
+                                                <button class="forge-tab-btn active" onclick="switchForgeTab(this, 'shorts')">Shorts</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'podcast')">Podcast</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'linkedin')">LinkedIn</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'blog')">Blog</button>
+                                                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'demo')">Demo</button>
+                                            </div>
+                                            <div class="forge-content-area">
+                                                <div class="forge-pane shorts active">{{ item.production_assets.shorts_script }}</div>
+                                                <div class="forge-pane podcast">{{ item.production_assets.podcast_script }}</div>
+                                                <div class="forge-pane linkedin">{{ item.production_assets.linkedin_post }}</div>
+                                                <div class="forge-pane blog">{{ item.production_assets.blog_outline }}</div>
+                                                <div class="forge-pane demo">{{ item.production_assets.demo_guide }}</div>
+                                            </div>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                     <div class="saved-actions">
                                         <button class="btn btn-small" onclick="updateCreatorItem({{ item.id }}, this.closest('.creator-saved-card'))">Save</button>
+                                        <button class="btn btn-small btn-primary" onclick="forgeProductionAssets({{ item.id }}, this)" title="Generate Shorts / Podcast / LinkedIn / Blog / Demo">Forge assets</button>
+                                        <span class="forge-status-pill state-{{ item.production_status or 'none' }}">{{ item.production_status or 'none' }}</span>
                                         <button class="btn btn-small action-ignore" onclick="deleteItem({{ item.id }}, this)">Remove</button>
                                     </div>
                                 </div>
@@ -1171,6 +1237,72 @@
                 </div>
 
                 <!-- Settings Tab -->
+                <!-- Forge Studio Tab -->
+                <div id="forge-studio" class="section" data-title="Forge Studio">
+                    <div class="section-header">
+                        <h2 class="section-title">🛠️ Forge Studio</h2>
+                        <div class="section-tools">
+                            <button class="btn btn-small" onclick="refreshForgeStudio()">Refresh</button>
+                        </div>
+                    </div>
+                    
+                    <div class="forge-studio-container">
+                        <div class="forge-sidebar">
+                            <h3 class="forge-sidebar-title">Research Pipeline</h3>
+                            <div class="forge-item-list" id="forge-item-list">
+                                <!-- Populated by JS -->
+                                <div class="empty-state">No forged items ready.</div>
+                            </div>
+                        </div>
+                        
+                        <div class="forge-main" id="forge-main-empty">
+                            <div class="forge-empty-state">
+                                <div class="forge-empty-icon">⚒️</div>
+                                <h3>Select an item to enter the Studio</h3>
+                                <p>Items promoted to 'Script Ready' with forged assets will appear here.</p>
+                            </div>
+                        </div>
+
+                        <div class="forge-main" id="forge-main-content" style="display: none;">
+                            <div class="forge-workspace-header">
+                                <div class="forge-active-title" id="forge-active-title">Strategic Synthesis</div>
+                                <div class="forge-active-meta" id="forge-active-meta">Recursive Dive • May 2026</div>
+                            </div>
+
+                            <div class="forge-workspace-layout">
+                                <div class="forge-asset-selector">
+                                    <button class="forge-asset-btn active" onclick="switchStudioAsset('shorts')">📹 YouTube Shorts</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('podcast')">🎙️ Podcast Script</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('linkedin')">🔗 LinkedIn Post</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('blog')">✍️ Technical Blog</button>
+                                    <button class="forge-asset-btn" onclick="switchStudioAsset('demo')">💻 Demo Guide</button>
+                                </div>
+
+                                <div class="forge-editor-container">
+                                    <div class="forge-editor-toolbar">
+                                        <span id="forge-asset-label">Shorts Script</span>
+                                        <button class="btn btn-small btn-primary" onclick="copyStudioAsset()">Copy to Clipboard</button>
+                                    </div>
+                                    <div class="forge-editor-content" id="forge-editor-content" contenteditable="true">
+                                        <!-- Asset content here -->
+                                    </div>
+                                </div>
+
+                                <div class="forge-context-sidebar">
+                                    <div class="forge-context-box">
+                                        <h4>Strategic Leads</h4>
+                                        <div class="forge-context-text" id="forge-context-leads">Loading...</div>
+                                    </div>
+                                    <div class="forge-context-box">
+                                        <h4>Munger Inversion</h4>
+                                        <div class="forge-context-text" id="forge-context-inversion">Loading...</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div id="settings" class="section">
                     <div class="section-header">
                         <h2 class="section-title">Settings</h2>

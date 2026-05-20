@@ -1235,6 +1235,10 @@ function showTab(tabId, btn, updateHash) {
             if (typeof initTrendsCharts === 'function') {
                 requestAnimationFrame(function() { initTrendsCharts(); });
             }
+        } else if (tabId === 'forge-studio') {
+            if (typeof refreshForgeStudio === 'function') {
+                refreshForgeStudio();
+            }
         } else {
             if (typeof resizeVisibleCharts === 'function') {
                 requestAnimationFrame(function() { resizeVisibleCharts(); });
@@ -1443,6 +1447,194 @@ function buildResearchPack(item, btn) {
         setButtonLoading(btn, false);
         showToast('Error', 'Network error. Please try again.', 'error');
     });
+}
+
+function requestEnrichment(item, btn) {
+    setButtonLoading(btn, true);
+    fetch('/api/enrich', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({ ...item, force: true }),
+    }).then(r => r.json()).then(d => {
+        if (d.queued) {
+            setButtonLoading(btn, false, 'Queued');
+            showToast('Enrichment queued', 'LLM creator pack will appear shortly.', 'success');
+            startEnrichmentPolling();
+        } else {
+            setButtonLoading(btn, false);
+            const reason = d.reason || 'unknown';
+            showToast('Not queued', `Reason: ${reason}.`, 'info');
+        }
+    }).catch(() => {
+        setButtonLoading(btn, false);
+        showToast('Error', 'Network error. Please try again.', 'error');
+    });
+}
+
+let enrichmentPollTimer = null;
+
+const ENRICHMENT_BADGE_LABELS = {
+    ready: 'LLM ✓',
+    ready_with_warnings: 'LLM ~',
+    queued: 'Queued',
+    failed: 'LLM ✗',
+    unenriched: 'Draft',
+};
+
+function refreshEnrichmentBadge(card) {
+    const hash = card.dataset.contentHash;
+    if (!hash) return Promise.resolve();
+    return fetch(`/api/enrich/${hash}`).then(r => {
+        if (!r.ok) return null;
+        return r.json();
+    }).then(d => {
+        if (!d) return;
+        const status = d.status || 'unenriched';
+        const badge = card.querySelector('.enrichment-badge');
+        if (badge) {
+            badge.className = `enrichment-badge state-${status}`;
+            badge.textContent = ENRICHMENT_BADGE_LABELS[status] || status;
+            badge.setAttribute('title', d.error || status);
+        }
+        card.dataset.enrichment = status;
+        if (status === 'ready' || status === 'ready_with_warnings') {
+            // Replace inline hook + title text from the fresh pack so the user
+            // sees real LLM output without needing a manual reload.
+            const pack = d.payload || {};
+            const hookEl = card.querySelector('.creator-hook');
+            if (hookEl && pack.hook) hookEl.textContent = pack.hook;
+            const titleEl = card.querySelector('h3');
+            if (titleEl && pack.suggested_titles && pack.suggested_titles.practical) {
+                titleEl.textContent = pack.suggested_titles.practical;
+            }
+        }
+    }).catch(() => {});
+}
+
+function refreshStaleEnrichmentBadges() {
+    const cards = document.querySelectorAll('.creator-opportunity-card[data-content-hash]');
+    cards.forEach(card => {
+        const state = card.dataset.enrichment || 'unenriched';
+        if (state === 'ready' || state === 'ready_with_warnings') return;
+        refreshEnrichmentBadge(card);
+    });
+}
+
+function startEnrichmentPolling() {
+    if (enrichmentPollTimer) return;
+    enrichmentPollTimer = setInterval(() => {
+        fetch('/api/enrich-status').then(r => r.json()).then(d => {
+            const el = document.getElementById('enrichment-status-pill');
+            if (el) {
+                const queued = d.queued || 0;
+                const inflight = d.in_flight || 0;
+                const ready = (d.cache_counts && d.cache_counts.ready) || 0;
+                el.textContent = `LLM: ${ready} ready / ${queued + inflight} pending`;
+                el.dataset.state = (queued + inflight) > 0 ? 'working' : 'idle';
+            }
+            refreshStaleEnrichmentBadges();
+            if ((d.queued || 0) === 0 && (d.in_flight || 0) === 0) {
+                clearInterval(enrichmentPollTimer);
+                enrichmentPollTimer = null;
+            }
+        }).catch(() => {});
+    }, 4000);
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (document.querySelector('.creator-opportunity-card[data-content-hash][data-enrichment="queued"]')) {
+        startEnrichmentPolling();
+    }
+});
+
+function forgeProductionAssets(itemId, btn) {
+    setButtonLoading(btn, true);
+    fetch(`/api/forge/${itemId}`, { method: 'POST' }).then(r => r.json()).then(d => {
+        if (d.ok) {
+            setButtonLoading(btn, false, 'Forging…');
+            showToast('Forge started', 'Multi-format assets will appear in a moment.', 'success');
+            pollForgeStatus(itemId, btn);
+        } else {
+            setButtonLoading(btn, false);
+            showToast('Forge error', d.error || 'Could not start forge.', 'error');
+        }
+    }).catch(() => {
+        setButtonLoading(btn, false);
+        showToast('Error', 'Network error. Please try again.', 'error');
+    });
+}
+
+const FORGE_PANE_KEYS = {
+    shorts: 'shorts_script',
+    podcast: 'podcast_script',
+    linkedin: 'linkedin_post',
+    blog: 'blog_outline',
+    demo: 'demo_guide',
+};
+
+function applyForgeAssets(card, assets) {
+    if (!card || !assets) return;
+    let forgeArea = card.querySelector('.production-forge-area');
+    if (!forgeArea) {
+        // Build the missing forge area in-place so a freshly-forged item
+        // doesn't require a page reload to show the new tabs.
+        const editor = card.querySelector('.saved-editor');
+        if (!editor) return;
+        forgeArea = document.createElement('div');
+        forgeArea.className = 'production-forge-area';
+        forgeArea.innerHTML = `
+            <div class="forge-label">🛠️ Production Forge</div>
+            <div class="forge-tabs">
+                <button class="forge-tab-btn active" onclick="switchForgeTab(this, 'shorts')">Shorts</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'podcast')">Podcast</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'linkedin')">LinkedIn</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'blog')">Blog</button>
+                <button class="forge-tab-btn" onclick="switchForgeTab(this, 'demo')">Demo</button>
+            </div>
+            <div class="forge-content-area">
+                <div class="forge-pane shorts active"></div>
+                <div class="forge-pane podcast"></div>
+                <div class="forge-pane linkedin"></div>
+                <div class="forge-pane blog"></div>
+                <div class="forge-pane demo"></div>
+            </div>`;
+        editor.appendChild(forgeArea);
+    }
+    Object.entries(FORGE_PANE_KEYS).forEach(([pane, key]) => {
+        const target = forgeArea.querySelector(`.forge-pane.${pane}`);
+        if (target) target.textContent = assets[key] || '';
+    });
+}
+
+function pollForgeStatus(itemId, btn) {
+    const card = btn ? btn.closest('.creator-saved-card') : null;
+    let attempts = 0;
+    const max = 30;
+    const timer = setInterval(() => {
+        attempts += 1;
+        fetch(`/api/forge-status/${itemId}`).then(r => r.json()).then(d => {
+            const status = d.status || 'none';
+            const pill = card ? card.querySelector('.forge-status-pill') : null;
+            if (pill) {
+                pill.className = `forge-status-pill state-${status}`;
+                pill.textContent = status;
+            }
+            if (status === 'ready') {
+                clearInterval(timer);
+                setButtonLoading(btn, false, 'Forged');
+                applyForgeAssets(card, d.assets || {});
+                showToast('Production assets ready', 'Five formats injected below.', 'success');
+            } else if (status === 'failed') {
+                clearInterval(timer);
+                setButtonLoading(btn, false);
+                showToast('Forge failed', 'See server logs for details.', 'error');
+            } else if (attempts >= max) {
+                clearInterval(timer);
+                setButtonLoading(btn, false);
+                showToast('Forge still running', 'Reload later to see results.', 'info');
+            }
+        }).catch(() => {});
+    }, 4000);
 }
 
 function ignoreItem(item, btn) {
@@ -1679,3 +1871,132 @@ async function loadVoteBadges() {
 }
 
 document.addEventListener('DOMContentLoaded', loadVoteBadges);
+
+function switchForgeTab(btn, type) {
+    const card = btn.closest('.production-forge-area');
+    const tabs = card.querySelectorAll('.forge-tab-btn');
+    const panes = card.querySelectorAll('.forge-pane');
+    
+    tabs.forEach(t => t.classList.remove('active'));
+    panes.forEach(p => p.classList.remove('active'));
+    
+    btn.classList.add('active');
+    const activePane = card.querySelector('.forge-pane.' + type);
+    if (activePane) activePane.classList.add('active');
+}
+
+let activeForgeItem = null;
+let activeForgeAssetType = 'shorts';
+
+async function refreshForgeStudio() {
+    const list = document.getElementById('forge-item-list');
+    list.innerHTML = '<div class="loading">Syncing Pipeline...</div>';
+    
+    try {
+        const res = await fetch('/api/saved?status=script_ready');
+        const data = await res.json();
+        const items = (data.items || []).filter(i => i.production_status === 'ready' || i.production_assets);
+        
+        if (items.length === 0) {
+            list.innerHTML = '<div class="empty-state">No forged items ready.</div>';
+            return;
+        }
+        
+        list.innerHTML = '';
+        items.forEach(item => {
+            const card = document.createElement('div');
+            card.className = 'forge-item-card';
+            if (activeForgeItem && activeForgeItem.id === item.id) card.classList.add('active');
+            card.onclick = () => selectForgeItem(item);
+            
+            card.innerHTML = `
+                <div class="forge-item-title">${item.working_title || item.title}</div>
+                <div class="forge-item-meta">${item.category} • ${item.source}</div>
+            `;
+            list.appendChild(card);
+        });
+    } catch (e) {
+        list.innerHTML = '<div class="error">Failed to load pipeline.</div>';
+    }
+}
+
+function selectForgeItem(item) {
+    activeForgeItem = item;
+    
+    // Update active class in list
+    document.querySelectorAll('.forge-item-card').forEach(c => {
+        c.classList.remove('active');
+        if (c.querySelector('.forge-item-title').innerText === (item.working_title || item.title)) {
+            c.classList.add('active');
+        }
+    });
+    
+    // Show content
+    document.getElementById('forge-main-empty').style.display = 'none';
+    document.getElementById('forge-main-content').style.display = 'flex';
+    
+    // Update headers
+    document.getElementById('forge-active-title').innerText = item.working_title || item.title;
+    document.getElementById('forge-active-meta').innerText = `${item.category} • ${item.source} • ${item.created_at.split(' ')[0]}`;
+    
+    // Update context
+    document.getElementById('forge-context-leads').innerText = item.notes.split('|')[0] || 'No leads extracted.';
+    document.getElementById('forge-context-inversion').innerText = item.notes.includes('INVERSION:') ? item.notes.split('INVERSION:')[1] : 'No risk analysis available.';
+    
+    // Default to shorts
+    switchStudioAsset('shorts');
+}
+
+function switchStudioAsset(type) {
+    activeForgeAssetType = type;
+    
+    // Update buttons
+    document.querySelectorAll('.forge-asset-btn').forEach(btn => {
+        btn.classList.remove('active');
+        if (btn.innerText.toLowerCase().includes(type)) btn.classList.add('active');
+    });
+    
+    // Update label
+    const labels = {
+        'shorts': '📹 YouTube Shorts Script',
+        'podcast': '🎙️ Podcast Dialogue',
+        'linkedin': '🔗 LinkedIn Professional Post',
+        'blog': '✍️ Technical Blog Outline',
+        'demo': '💻 Visual Demo Guide'
+    };
+    document.getElementById('forge-asset-label').innerText = labels[type];
+    
+    // Load content
+    const assets = typeof activeForgeItem.production_assets === 'string' 
+        ? JSON.parse(activeForgeItem.production_assets) 
+        : activeForgeItem.production_assets;
+        
+    const content = assets[type + '_script'] || assets[type + '_post'] || assets[type + '_outline'] || assets[type + '_guide'] || assets[type] || 'Asset not forged for this format.';
+    document.getElementById('forge-editor-content').innerText = content;
+}
+
+function copyStudioAsset() {
+    const text = document.getElementById('forge-editor-content').innerText;
+    navigator.clipboard.writeText(text).then(() => {
+        const btn = document.querySelector('.forge-editor-toolbar .btn');
+        const oldText = btn.innerText;
+        btn.innerText = 'Copied!';
+        btn.classList.add('btn-success');
+        setTimeout(() => {
+            btn.innerText = oldText;
+            btn.classList.remove('btn-success');
+        }, 2000);
+    });
+}
+
+// End of Forge Studio logic
+
+window.selectForgeItem = selectForgeItem;
+
+async function openItemInStudio(itemId) {
+    showTab('forge-studio');
+    const res = await fetch('/api/saved?status=script_ready');
+    const data = await res.json();
+    const item = (data.items || []).find(i => i.id === itemId);
+    if (item) selectForgeItem(item);
+}
