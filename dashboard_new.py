@@ -1300,6 +1300,24 @@ def api_creator_digest():
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/markets")
+def api_markets():
+    try:
+        from fetch_markets import load_markets
+        return jsonify(load_markets())
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
+@app.route("/api/markets/refresh", methods=["POST"])
+def api_markets_refresh():
+    try:
+        from fetch_markets import fetch_markets
+        return jsonify(fetch_markets())
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+
+
 @app.route("/api/votes")
 def api_votes():
     """Return vote counts for all items: {url: count}"""

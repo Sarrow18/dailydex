@@ -2570,6 +2570,177 @@ body {
   gap: 16px;
 }
 
+/* ── AI Markets section ─────────────────────────────────────── */
+
+/* ETF pulse strip */
+.etf-strip {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 10px 16px;
+  overflow-x: auto;
+  flex-wrap: wrap;
+  gap: 2px 0;
+  margin-bottom: 20px;
+}
+.etf-strip-label {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  padding-right: 16px;
+  border-right: 1px solid var(--border);
+  margin-right: 16px;
+  white-space: nowrap;
+}
+.etf-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 16px;
+  border-right: 1px solid var(--border);
+  white-space: nowrap;
+}
+.etf-item:last-child { border-right: none; }
+.etf-ticker {
+  font-family: 'Fira Code', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}
+.etf-name {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.etf-price {
+  font-family: 'Fira Code', ui-monospace, monospace;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+/* Stock cards grid */
+.stock-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.stock-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px 16px;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.stock-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 16px rgba(0,0,0,0.08);
+}
+.stock-card-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.stock-rank {
+  font-family: 'Fira Code', ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+  min-width: 18px;
+  text-align: right;
+}
+.stock-identity { flex: 1; min-width: 0; }
+.stock-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.stock-ticker {
+  font-family: 'Fira Code', ui-monospace, monospace;
+  font-size: 10.5px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+.stock-right { text-align: right; flex-shrink: 0; }
+.stock-price {
+  font-family: 'Fira Code', ui-monospace, monospace;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--text);
+  line-height: 1.2;
+}
+.stock-change {
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Fira Code', ui-monospace, monospace;
+}
+.stock-change.up   { color: #10B981; }
+.stock-change.down { color: #EF4444; }
+.stock-cap {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: 'Fira Code', ui-monospace, monospace;
+  padding-left: 28px;
+}
+
+/* 52-week range bar */
+.stock-52w { padding-left: 28px; }
+.stock-52w-bar {
+  height: 3px;
+  background: var(--border);
+  border-radius: 2px;
+  position: relative;
+  margin-bottom: 3px;
+}
+.stock-52w-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--primary);
+  border-radius: 2px;
+}
+.stock-52w-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 9.5px;
+  color: var(--text-muted);
+  font-family: 'Fira Code', ui-monospace, monospace;
+}
+
+/* Skeleton loading state */
+.markets-skeleton { display: flex; flex-direction: column; gap: 16px; }
+.markets-skeleton-strip {
+  height: 50px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+.markets-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 12px;
+}
+.markets-skeleton-card {
+  height: 110px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  animation: skeleton-pulse 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
 /* Reduced motion support */
 @media (prefers-reduced-motion: reduce) {
   *,

@@ -1260,7 +1260,9 @@ function showTab(tabId, btn, updateHash) {
             titleEl.textContent = sectionTitle;
         }
 
-        if (tabId === 'trends') {
+        if (tabId === 'markets') {
+            requestAnimationFrame(loadMarkets);
+        } else if (tabId === 'trends') {
             if (typeof initTrendsCharts === 'function') {
                 requestAnimationFrame(function() { initTrendsCharts(); });
             }
@@ -2028,6 +2030,95 @@ async function openItemInStudio(itemId) {
     const data = await res.json();
     const item = (data.items || []).find(i => i.id === itemId);
     if (item) selectForgeItem(item);
+}
+
+// --- AI Markets ---
+var _marketsLoaded = false;
+var _marketsRefreshTimer = null;
+
+async function loadMarkets(force) {
+    if (_marketsLoaded && !force) return;
+    var el = document.getElementById('markets-content');
+    if (!el) return;
+
+    try {
+        var data = await fetch('/api/markets').then(function(r) { return r.json(); });
+        renderMarkets(data);
+        _marketsLoaded = true;
+        clearTimeout(_marketsRefreshTimer);
+        _marketsRefreshTimer = setTimeout(function() { _marketsLoaded = false; }, 15 * 60 * 1000);
+    } catch (e) {
+        el.innerHTML = '<div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">Could not load market data. Check your connection.</div>';
+    }
+}
+
+async function refreshMarkets() {
+    _marketsLoaded = false;
+    document.getElementById('markets-content').innerHTML = '<div class="markets-skeleton"><div class="markets-skeleton-strip"></div><div class="markets-skeleton-grid">' + '<div class="markets-skeleton-card"></div>'.repeat(10) + '</div></div>';
+    try {
+        await fetch('/api/markets/refresh', { method: 'POST' });
+    } catch(e) {}
+    await loadMarkets(true);
+}
+
+function _fmtPct(pct) {
+    var cls = pct >= 0 ? 'up' : 'down';
+    var arrow = pct >= 0 ? '▲' : '▼';
+    return '<span class="stock-change ' + cls + '">' + arrow + ' ' + Math.abs(pct).toFixed(2) + '%</span>';
+}
+
+function _week52Bar(price, low, high) {
+    if (!high || high === low) return '';
+    var pct = Math.min(100, Math.max(0, ((price - low) / (high - low)) * 100));
+    return '<div class="stock-52w"><div class="stock-52w-bar"><div class="stock-52w-fill" style="width:' + pct.toFixed(1) + '%"></div></div><div class="stock-52w-labels"><span>$' + low.toLocaleString() + '</span><span>52w</span><span>$' + high.toLocaleString() + '</span></div></div>';
+}
+
+function renderMarkets(data) {
+    var el = document.getElementById('markets-content');
+    if (!el) return;
+
+    var updated = data.last_updated ? new Date(data.last_updated).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : '—';
+
+    // ETF pulse strip
+    var etfHtml = (data.etfs || []).map(function(e) {
+        return '<div class="etf-item"><span class="etf-ticker">' + e.ticker + '</span>' +
+               '<span class="etf-name">' + e.name + '</span>' +
+               '<span class="etf-price">$' + e.price.toFixed(2) + '</span>' +
+               _fmtPct(e.change_pct) + '</div>';
+    }).join('');
+
+    // Stock cards
+    var stockHtml = (data.stocks || []).map(function(s) {
+        return '<div class="stock-card card">' +
+            '<div class="stock-card-top">' +
+                '<span class="stock-rank">' + s.rank + '</span>' +
+                '<div class="stock-identity"><div class="stock-name">' + s.name + '</div>' +
+                '<div class="stock-ticker">' + s.ticker + '</div></div>' +
+                '<div class="stock-right">' +
+                    '<div class="stock-price">$' + s.price.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}) + '</div>' +
+                    _fmtPct(s.change_pct) +
+                '</div>' +
+            '</div>' +
+            '<div class="stock-cap">' + s.market_cap + '</div>' +
+            _week52Bar(s.price, s.week52_low, s.week52_high) +
+        '</div>';
+    }).join('');
+
+    el.innerHTML =
+        '<div class="section-header">' +
+            '<div class="header-left">' +
+                '<h2 class="section-title">AI Markets <span class="section-count">' + (data.stocks||[]).length + ' companies</span></h2>' +
+                '<span class="text-muted" style="font-size:11px">Prices: Yahoo Finance &nbsp;·&nbsp; Rankings: <a href="https://companiesmarketcap.com/artificial-intelligence/largest-ai-companies-by-marketcap/" target="_blank" style="color:inherit">companiesmarketcap.com</a></span>' +
+            '</div>' +
+            '<div class="header-right">' +
+                '<span class="last-updated-label">Updated ' + updated + '</span>' +
+                '<button class="btn btn-small" onclick="refreshMarkets()">↻ Refresh</button>' +
+            '</div>' +
+        '</div>' +
+        '<div class="etf-strip"><div class="etf-strip-label">AI ETF Pulse</div>' + etfHtml + '</div>' +
+        '<div class="stock-grid">' + stockHtml + '</div>';
+
+    if (typeof initSourceBadgeIcons === 'function') initSourceBadgeIcons();
 }
 
 // --- Provider logo badges ---
