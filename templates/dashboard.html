@@ -161,186 +161,167 @@
                 <!-- Overview Page -->
                 <div id="overview" class="section active" data-title="{{ 'Creator Brief' if creator_mode else 'Overview' }}">
                     {% if creator_mode %}
-                    <div class="creator-brief-grid">
-                        <div class="creator-hero card">
-                            <div class="creator-hero-head">
-                                <div>
-                                    <div class="section-kicker">Creator Brief</div>
-                                    <h2 class="creator-hero-title">What should I make today?</h2>
-                                    <p class="creator-hero-copy">Sarrow DailyDex Creator turns AI signals into concrete content decisions with hooks, formats, evidence, and script starters.</p>
-                                </div>
-                                <div class="creator-hero-meta">
-                                    <span class="creator-stat">{{ creator_opportunities|length }} ideas</span>
-                                    <span class="creator-stat">{{ creator_brief.pipeline_count }} in pipeline</span>
-                                </div>
+                    <!-- ── Creator Daily Brief Layout ── -->
+                    <div class="brief-overview-shell">
+
+                        <!-- Creator KPI strip -->
+                        <div class="brief-kpi-strip">
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Ideas Today</div>
+                                <div class="brief-kpi-value">{{ creator_opportunities|length }}<small style="color:var(--primary)">● ready</small></div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">In Pipeline</div>
+                                <div class="brief-kpi-value">{{ creator_brief.pipeline_count }}</div>
+                                <div class="brief-kpi-sub">Ideas in progress</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Best Score</div>
+                                <div class="brief-kpi-value">{{ creator_brief.best_video_idea.creator_score if creator_brief.best_video_idea else '—' }}</div>
+                                <div class="brief-kpi-sub">Creator potential</div>
+                            </div>
+                            <div class="brief-kpi-cell">
+                                <div class="brief-kpi-label">Clusters</div>
+                                <div class="brief-kpi-value">{{ creator_brief.content_clusters|length }}</div>
+                                <div class="brief-kpi-sub">Story clusters</div>
                             </div>
                         </div>
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Recent Pipeline Ideas</h2>
-                            <div class="card-grid">
-                                {% for item in creator_saved_groups[0].group_entries[:3] %}
-                                <div class="card item-card creator-saved-card">
-                                    <div class="card-header">
-                                        <span class="badge-source">{{ item.format or 'Creator Idea' }}</span>
-                                        <span class="badge-score hot">{{ item.creator_score }}</span>
-                                    </div>
-                                    <div class="card-title">{{ item.working_title or item.title }}</div>
-                                    {% if item.hook %}
-                                    <div class="card-hook"><strong>Hook:</strong> {{ item.hook }}</div>
+                        {% set best = creator_brief.best_video_idea %}
+                        {% if best %}
+                        <div class="brief-digest-grid">
+
+                            <!-- Lead idea -->
+                            <div class="brief-lead">
+                                <div class="brief-kicker">
+                                    <span>Lead Idea</span>
+                                    <span class="badge-source source-{{ best.source_type }}">{{ best.best_format }}</span>
+                                    <span class="badge-score hot">{{ best.creator_score }}</span>
+                                    <span class="brief-kicker-tail"></span>
+                                    <span style="font-family:'Fira Code',monospace;font-size:11px;color:var(--text-muted)">{{ last_updated }}</span>
+                                </div>
+                                <h2>{{ best.suggested_titles.curiosity or best.title }}</h2>
+                                <div class="brief-lead-body">{{ best.hook }}</div>
+                                <div class="brief-lead-why">
+                                    <strong style="color:var(--text)">Why viewers care.</strong> {{ best.why_viewers_care }}
+                                    {% if best.creator_reason %}
+                                    <strong style="color:var(--text)"> Why now.</strong> {{ best.creator_reason }}
                                     {% endif %}
-                                    <div class="card-footer">
-                                        <div class="card-actions">
-                                            <button class="btn btn-small" onclick="showTab('content-pipeline')">View in Pipeline</button>
+                                </div>
+                                {% if best.three_key_points %}
+                                <div style="display:flex;flex-wrap:wrap;gap:6px">
+                                    {% for point in best.three_key_points %}<span class="tag">{{ point }}</span>{% endfor %}
+                                </div>
+                                {% endif %}
+                                <div class="brief-lead-actions">
+                                    <button class="btn btn-primary btn-small" onclick='saveCreatorItem({{ best|tojson }}, "idea", this)'>Save as idea</button>
+                                    <button class="btn btn-small" onclick='buildResearchPack({{ best|tojson }}, this)'>Research pack</button>
+                                    <button class="btn btn-small" onclick='saveCreatorItem({{ best|tojson }}, "script_ready", this)'>Draft script</button>
+                                    <a href="{{ best.url }}" target="_blank" class="btn btn-small">Open source</a>
+                                    <span class="brief-action-rec">{{ best.production_effort|title }} effort</span>
+                                </div>
+
+                                <div class="brief-rule"></div>
+                                <div class="brief-kicker">Also Worth Making <span class="brief-kicker-tail"></span></div>
+
+                                <!-- Long-form candidates as followups -->
+                                <div class="brief-followup-list">
+                                    {% for item in creator_brief.long_form_candidates[:4] %}
+                                    <div class="brief-followup-row">
+                                        <span class="brief-rank">#{{ loop.index + 1 }}</span>
+                                        <div style="min-width:0">
+                                            <div class="brief-followup-title">{{ item.suggested_titles.curiosity or item.title }}</div>
+                                            <div class="brief-followup-meta">
+                                                <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                                <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                            </div>
+                                            {% if item.why_viewers_care %}
+                                            <div class="brief-followup-summary"><strong>Why viewers care.</strong> {{ item.why_viewers_care }}</div>
+                                            {% endif %}
+                                        </div>
+                                        <div class="brief-followup-actions">
+                                            <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
+                                            <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Research</button>
                                         </div>
                                     </div>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
                             </div>
-                        </div>
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Best Video Idea Today</h2>
-                            {% set best = creator_brief.best_video_idea %}
-                            {% if best %}
-                            <div class="card creator-best-card search-target" data-search="{{ (best.title ~ ' ' ~ best.topic ~ ' ' ~ best.hook)|lower }}">
-                                <div class="creator-best-head">
-                                    <div>
-                                        <div class="badge-source source-{{ best.source_type }}">{{ best.best_format }}</div>
-                                        <h3>{{ best.suggested_titles.curiosity or best.title }}</h3>
-                                    </div>
-                                    <div class="creator-score-stack">
-                                        <span class="badge-score hot">{{ best.creator_score }}</span>
-                                        <span class="creator-score-label">Creator</span>
-                                    </div>
+                            <!-- Sticky right rail -->
+                            <div class="brief-rail" id="brief-creator-rail">
+                                <div class="brief-tabs" role="tablist">
+                                    <button class="brief-tab active" onclick="briefTab(this,'brief-creator-shorts')" role="tab">Shorts<span class="brief-tab-count">{{ creator_brief.shorts_ideas|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-creator-wins')" role="tab">Quick Wins<span class="brief-tab-count">{{ creator_brief.quick_wins|length }}</span></button>
+                                    <button class="brief-tab" onclick="briefTab(this,'brief-creator-clusters')" role="tab">Clusters<span class="brief-tab-count">{{ creator_brief.content_clusters|length }}</span></button>
                                 </div>
-                                <p class="creator-hook">{{ best.hook }}</p>
-                                <div class="creator-insight-grid">
-                                    <div>
-                                        <h4>Why viewers care</h4>
-                                        <p>{{ best.why_viewers_care }}</p>
-                                    </div>
-                                    <div>
-                                        <h4>Why now</h4>
-                                        <p>{{ best.creator_reason }}</p>
-                                    </div>
-                                    <div>
-                                        <h4>Production effort</h4>
-                                        <p>{{ best.production_effort|title }}</p>
-                                    </div>
-                                    <div>
-                                        <h4>Thumbnail text</h4>
-                                        <p>{{ best.thumbnail_text|join(' / ') }}</p>
-                                    </div>
-                                </div>
-                                <div class="creator-outline-block">
-                                    <h4>Suggested outline</h4>
-                                    <ol>
-                                        {% for point in best.three_key_points %}
-                                        <li>{{ point }}</li>
-                                        {% endfor %}
-                                    </ol>
-                                </div>
-                                <div class="creator-evidence-block">
-                                    <h4>Source evidence</h4>
-                                    <ul>
-                                        {% for evidence in best.source_evidence[:4] %}
-                                        <li><a href="{{ evidence.url }}" target="_blank">{{ evidence.source_label }}: {{ evidence.title }}</a></li>
-                                        {% endfor %}
-                                    </ul>
-                                </div>
-                                <div class="card-actions creator-actions-row">
-                                    <button class="btn btn-small" onclick='saveCreatorItem({{ best|tojson }}, "idea", this)'>Save as idea</button>
-                                    <button class="btn btn-small" onclick='buildResearchPack({{ best|tojson }}, this)'>Build research pack</button>
-                                    <button class="btn btn-small btn-primary" onclick='saveCreatorItem({{ best|tojson }}, "script_ready", this)'>Draft script</button>
-                                    <a href="{{ best.url }}" target="_blank" class="btn btn-small">Open Source</a>
-                                </div>
-                            </div>
-                            {% else %}
-                            <div class="card"><p>No creator-ready ideas yet. Refresh data and check again.</p></div>
-                            {% endif %}
-                        </div>
 
-                        <div class="creator-section">
-                            <h2 class="section-title">Shorts Ideas</h2>
-                            <div class="creator-mini-grid">
-                                {% for item in creator_brief.shorts_ideas %}
-                                <div class="card creator-mini-card search-target" data-search="{{ (item.topic ~ ' ' ~ item.hook_line)|lower }}">
-                                    <div class="creator-mini-top">
-                                        <span class="badge-source source-{{ item.source_type }}">Short</span>
-                                        <span class="badge-score interesting">{{ item.creator_score }}</span>
+                                <!-- Shorts tab -->
+                                <div class="brief-rail-body" id="brief-creator-shorts">
+                                    {% for item in creator_brief.shorts_ideas %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score interesting">{{ item.creator_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">Short</span>
+                                        </div>
+                                        <div class="brief-weekend-title">{{ item.hook_line }}</div>
+                                        <div class="brief-weekend-why">{{ item.short_script }}</div>
+                                        {% if item.visual_idea %}
+                                        <div class="brief-cmd">Visual: {{ item.visual_idea }}</div>
+                                        {% endif %}
                                     </div>
-                                    <h3>{{ item.hook_line }}</h3>
-                                    <p>{{ item.short_script }}</p>
-                                    <div class="creator-mini-meta">
-                                        <span>Visual: {{ item.visual_idea }}</span>
-                                        <span>CTA: {{ item.cta }}</span>
-                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No shorts ideas yet.</p>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
-                            </div>
-                        </div>
 
-                        <div class="creator-section">
-                            <h2 class="section-title">Quick Wins</h2>
-                            <div class="creator-mini-grid">
-                                {% for item in creator_brief.quick_wins %}
-                                <div class="card creator-mini-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic)|lower }}">
-                                    <div class="creator-mini-top">
-                                        <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
-                                        <span class="creator-effort creator-effort-{{ item.production_effort }}">{{ item.production_effort }}</span>
+                                <!-- Quick Wins tab -->
+                                <div class="brief-rail-body" id="brief-creator-wins" hidden>
+                                    {% for item in creator_brief.quick_wins %}
+                                    <div class="brief-weekend-item">
+                                        <div style="display:flex;justify-content:space-between;align-items:center;gap:6px">
+                                            <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
+                                            <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                            <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">{{ item.production_effort }}</span>
+                                        </div>
+                                        <div class="brief-weekend-title">{{ item.suggested_titles.practical or item.title }}</div>
+                                        <div class="brief-weekend-why">{{ item.why_viewers_care }}</div>
+                                        <div style="display:flex;gap:4px;margin-top:4px">
+                                            <button class="btn btn-small" style="font-size:10px;padding:2px 6px" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
+                                            <button class="btn btn-small" style="font-size:10px;padding:2px 6px" onclick='buildResearchPack({{ item|tojson }}, this)'>Research</button>
+                                        </div>
                                     </div>
-                                    <h3>{{ item.suggested_titles.practical or item.title }}</h3>
-                                    <p>{{ item.why_viewers_care }}</p>
-                                    <div class="card-actions">
-                                        <button class="btn btn-small" onclick='saveCreatorItem({{ item|tojson }}, "idea", this)'>Save</button>
-                                        <button class="btn btn-small" onclick='buildResearchPack({{ item|tojson }}, this)'>Research pack</button>
-                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No quick wins yet.</p>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
-                            </div>
-                        </div>
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Long-form Candidates</h2>
-                            <div class="creator-opportunity-grid">
-                                {% for item in creator_brief.long_form_candidates %}
-                                <div class="card creator-opportunity-card search-target" data-search="{{ (item.title ~ ' ' ~ item.topic ~ ' ' ~ item.hook)|lower }}">
-                                    <div class="creator-opportunity-head">
-                                        <span class="badge-score {% if item.creator_score >= 80 %}hot{% elif item.creator_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.creator_score }}</span>
-                                        <span class="badge-source source-{{ item.source_type }}">{{ item.best_format }}</span>
+                                <!-- Clusters tab -->
+                                <div class="brief-rail-body" id="brief-creator-clusters" hidden>
+                                    {% for cluster in creator_brief.content_clusters %}
+                                    <div class="brief-corr-card">
+                                        <div class="brief-corr-topic">
+                                            <span>{{ cluster.topic }}</span>
+                                            <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
+                                        </div>
+                                        <div class="brief-weekend-why" style="margin-top:4px">{{ cluster.why_this_is_a_story }}</div>
+                                        <div class="brief-cmd" style="margin-top:4px">{{ cluster.recommended_angle }}</div>
+                                        <div style="font-size:10px;color:var(--text-muted);margin-top:4px">{{ cluster.source_count }} sources · {{ cluster.best_content_format }}</div>
                                     </div>
-                                    <h3>{{ item.suggested_titles.curiosity or item.title }}</h3>
-                                    <p class="creator-hook">{{ item.hook }}</p>
-                                    <p>{{ item.why_viewers_care }}</p>
-                                    <div class="creator-outline-inline">
-                                        {% for point in item.three_key_points %}<span class="tag">{{ point }}</span>{% endfor %}
-                                    </div>
+                                    {% else %}
+                                    <p class="text-muted" style="font-size:12px;padding-top:8px">No clusters yet.</p>
+                                    {% endfor %}
                                 </div>
-                                {% endfor %}
                             </div>
-                        </div>
+                        </div><!-- /brief-digest-grid -->
 
-                        <div class="creator-section full-width">
-                            <h2 class="section-title">Content Clusters</h2>
-                            <div class="creator-cluster-grid">
-                                {% for cluster in creator_brief.content_clusters %}
-                                <div class="card creator-cluster-card search-target" data-search="{{ (cluster.topic ~ ' ' ~ cluster.recommended_angle)|lower }}">
-                                    <div class="creator-cluster-head">
-                                        <h3>{{ cluster.topic }}</h3>
-                                        <span class="badge-score watch">{{ cluster.creator_score|round|int }}</span>
-                                    </div>
-                                    <p>{{ cluster.why_this_is_a_story }}</p>
-                                    <p><strong>Angle:</strong> {{ cluster.recommended_angle }}</p>
-                                    <div class="creator-cluster-meta">
-                                        <span>{{ cluster.source_count }} sources</span>
-                                        <span>{{ cluster.best_content_format }}</span>
-                                    </div>
-                                </div>
-                                {% endfor %}
-                            </div>
+                        {% else %}
+                        <div class="card" style="padding:2rem;text-align:center;color:var(--text-muted)">
+                            No creator ideas yet — click <strong>Refresh Now</strong> to fetch today's signals.
                         </div>
-                    </div>
+                        {% endif %}
+
+                    </div><!-- /brief-overview-shell -->
                     {% else %}
                     <!-- ── Daily Brief Layout (Design D) ── -->
                     <div class="brief-overview-shell">
