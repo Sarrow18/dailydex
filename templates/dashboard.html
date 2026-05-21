@@ -419,10 +419,11 @@
                                             <div class="brief-followup-meta">
                                                 <span class="badge-score {% if item.signal_score >= 80 %}hot{% elif item.signal_score >= 60 %}watch{% else %}interesting{% endif %}">{{ item.signal_score }}</span>
                                                 <span class="badge-source source-{{ item.source_type }}">{{ item.source_label }}</span>
-                                                {% if item.insight %}
-                                                <span class="brief-followup-insight">{{ item.insight }}</span>
-                                                {% endif %}
                                             </div>
+                                            {% set summary = item.why_it_matters or item.insight %}
+                                            {% if summary %}
+                                            <div class="brief-followup-summary"><strong>Why it matters.</strong> {{ summary }}</div>
+                                            {% endif %}
                                         </div>
                                         <div class="brief-followup-actions">
                                             <button class="btn btn-small" onclick='saveItem({{ {"url": item.url, "title": item.title, "source": item.source, "source_type": item.source_type, "category": item.categories[0] if item.categories else "", "signal_score": item.signal_score}|tojson }}, this)'>{{ 'Saved' if item.url in saved_urls else 'Save' }}</button>
