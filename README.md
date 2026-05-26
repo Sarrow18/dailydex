@@ -1,6 +1,6 @@
 # DailyDex
 
-![Version](https://img.shields.io/badge/version-v0.10-blue)
+![Version](https://img.shields.io/badge/version-v0.11-blue)
 ![Python](https://img.shields.io/badge/python-3.11%2B-3776AB?logo=python&logoColor=white)
 ![Flask](https://img.shields.io/badge/flask-dashboard-111827?logo=flask&logoColor=white)
 ![Status](https://img.shields.io/badge/status-active-22c55e)
@@ -16,7 +16,7 @@ Most AI feeds are noisy.
 
 DailyDex helps builders identify what matters, what is worth saving, what is worth testing, and whether source data is fresh.
 
-It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for turning AI signals into concrete content decisions, and a **Telegram social layer** so friends can vote on your daily picks.
+It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for turning AI signals into concrete content decisions, a **Telegram social layer** so friends can vote on your daily picks, and a **Forge Studio** with AI-powered content agents built for [AI Practicum](https://www.youtube.com/@AIPracticum).
 
 ## Highlights
 
@@ -27,6 +27,9 @@ It now also includes **DailyDex Creator Mode**, a creator-intelligence layer for
 - **Try This Weekend** section for hands-on projects
 - **Saved intelligence board** with workflow states
 - **Creator Mode** for video ideas, content clusters, research packs, and script starters
+- **Research Packs** — inline-editable markdown notes, sendable directly to the Content Pipeline
+- **Content Pipeline** — Kanban board from `idea` → `script_ready` → `published`; items marked Script Ready surface a one-click **Open in Studio** button
+- **Forge Studio** — two-panel workspace: Pipeline view for editing forged assets, and an **AI Agents** panel with three specialised Practicum content agents
 - **Trends view** with charts and radar
 - **Digest generation** in Markdown
 - **Telegram bot** — friends subscribe, receive daily picks, and vote on items; voted items surface a badge on the dashboard
@@ -163,8 +166,9 @@ POST /api/bot/send
 
 ```text
 DailyDex/
-├── dashboard_new.py          # Flask app and routes
+├── dashboard_new.py          # Flask app and routes (incl. agent-run, research-pack edit)
 ├── creator_intelligence.py   # creator scoring, briefs, clusters, and research packs
+├── llm_summary.py            # LLM provider abstraction — Gemini CLI, Ollama, Claude Code CLI
 ├── fetch_news.py             # external source fetch pipeline
 ├── scoring_engine.py         # scoring and ranking logic
 ├── data_models.py            # SQLite state, source health, subscribers, and votes
@@ -172,9 +176,13 @@ DailyDex/
 ├── telegram_bot.py           # Telegram bot — daily digest and friend voting
 ├── templates/dashboard.html  # main server-rendered UI
 ├── static/app.css            # design system and layout
-├── static/app.js             # live updates, interactions, and vote badge loader
+├── static/app.js             # live updates, interactions, agents, Forge Studio
 ├── config.json               # runtime source configuration, variants, and telegram settings
-└── data/                     # runtime cache, digests, DB, and vote URL map
+└── data/
+    ├── intelligence.db       # SQLite — saved items, votes, enrichment cache
+    ├── research_packs/       # per-topic markdown research packs
+    ├── cache/                # scored JSON cache
+    └── digests/              # generated markdown digests
 ```
 
 ## System Flow
@@ -279,6 +287,10 @@ flowchart LR
 - `GET /api/saved` - list saved items
 - `POST /api/research-pack` - generate a creator research pack
 - `GET /api/research-packs` - list saved research packs
+- `GET /api/research-pack/<filename>` - get raw markdown content of a research pack
+- `PUT /api/research-pack/<filename>` - save edited markdown back to disk
+- `POST /api/research-pack/<filename>/send-to-pipeline` - create a pipeline item from a research pack
+- `POST /api/agent-run` - run a Practicum AI content agent (`youtube`, `shorts`, `demo`)
 - `GET /api/creator-digest` - build the creator daily brief
 - `PUT /api/saved/<id>/status` - update saved status
 - `PUT /api/saved/<id>/notes` - update notes and tags
@@ -485,20 +497,50 @@ See [docs/release_validation_v0.9.md](docs/release_validation_v0.9.md) for manua
 - richer saved-item workflow operations
 - deeper trend analytics with accessible chart fallbacks
 - more source families and better source filtering
-- LLM-assisted script generation
-- YouTube API integration
-- publishing calendar
+- YouTube API integration for publishing calendar and analytics
 - competitor channel tracking
 - trend-to-video automation
 - Reddit Pulse section (r/LocalLLaMA, r/MachineLearning)
 - ProductHunt AI launches feed
 - Model leaderboard delta tracking
+- Forge Studio streaming output for long agent runs
+- Agent history — replay and compare previous agent outputs per topic
 
 ## Project Status
 
-v0.10 — Telegram Social Layer
+v0.11 — Forge Studio + AI Practicum Agents
 
 This repo is actively evolving. Expect rapid iteration on data quality, workflow UX, and presentation.
+
+## What's New (v0.11)
+
+### Research Packs
+- Each research pack card now has an **Edit** button that opens an inline markdown editor — edit sources, add notes, and save back to the `.md` file without leaving the dashboard
+- **→ Pipeline** button on every pack creates a Content Pipeline item at `researching` status with the full pack content attached as notes
+
+### Content Pipeline
+- Items promoted to `script_ready` now show a prominent **⚒️ Open in Studio** button that jumps directly into Forge Studio
+
+### Forge Studio — AI Agents
+Forge Studio now has two tabs: **📋 Pipeline** (existing asset editor) and **🤖 AI Agents** (new).
+
+The Agents panel contains three specialised Practicum content agents, each with its own input form and editable output:
+
+| Agent | Purpose |
+|---|---|
+| 📺 **YouTube — The Practicum** | Generates 3 SEO-optimised title options, a full video description with timestamp placeholders, 5 tags, a thumbnail concept, and a full outline with talking points |
+| 🎬 **Shorts — The Practicum** | Writes a 60-second YouTube Short script, a full Podcast episode with host dialogue segments, or a live Demo narration script |
+| 💻 **Demo — The Practicum** | Produces a step-by-step demo guide, a 6–8 frame GIF storyboard, screenshot callout annotations, and an opening paragraph to read before the demo |
+
+Agent outputs are editable inline and can be copied to clipboard or sent directly to the Content Pipeline as `script_ready` items.
+
+All three agents run via the **Claude Code CLI** using your existing OAuth session — no API key required.
+
+### API additions
+- `GET /api/research-pack/<filename>` — fetch raw markdown of a research pack
+- `PUT /api/research-pack/<filename>` — save edited markdown back to disk
+- `POST /api/research-pack/<filename>/send-to-pipeline` — create a pipeline item from a research pack
+- `POST /api/agent-run` — run a Practicum content agent (`youtube`, `shorts`, or `demo`) and return the LLM output
 
 ## What's New (v0.10)
 
